@@ -30,9 +30,6 @@ opMult(A::matrixOp)=A.opmult
 isOpAdjoint(A::matrixOp)=A.isAdjoint
 isOpAdjoint(A::compositeOp)=A.isAdjoint
 
-function setMetaData(n,m,mp)
-    ccall((:mymatvec_,"./mymatmul.so"),Void,(Ref{Complex128},Ref{Complex128},Ref{Complex128}),A,x.vec,newvecs)
-end
 
 struct generalVec
     vec::Array{Complex128,2}
@@ -52,8 +49,9 @@ function generalVec(vec::Array{Complex128,1})
     return generalVec(reshape(vec,length(vec),1))
 end
 
-
-function setMetaData(n::Integer,nvctr::Integer,nvctrp::Integer)
+function setMetaData(x::generalVec)
+    (n,nvctr)=size(x)
+    nvctrp=nvctr
     ccall((:set_blaswrapper_objects_,"./mymatmul.so"),Void,(Ref{Int32},Ref{Int32},Ref{Int32}),Ref{Int32}(n),Ref{Int32}(nvctr),Ref{Int32}(nvctrp))
 end
 
@@ -66,8 +64,8 @@ function matrixOp(A::Array{Complex128,2})
         #newvecs=A*x.vec[x.indices1,x.indices2]
         newvecs=zeros(Complex128,size(x.vec,1),size(x.vec,2))
 
-	#have to do this with every mat-vec because we don't necessarily know nvctr a priori.
-	setMetaData(size(A,1),size(x.vec,1),size(x.vec,2))
+	#have to do this with every mat-vec because we don't necessarily know vector block size a priori.
+	setMetaData(x)
 
         ccall((:mymatvec_,"./mymatmul.so"),Void,(Ref{Complex128},Ref{Complex128},Ref{Complex128}),A,x.vec,newvecs)
 
@@ -79,8 +77,8 @@ function matrixOp(A::Array{Complex128,2})
         #newvecs=A'*x.vec[x.indices1,x.indices2]
         newvecs=zeros(Complex128,size(x.vec,1),size(x.vec,2))
 
-	#have to do this with every mat-vec because we don't necessarily know nvctr a priori.
-	setMetaData(size(A,1),size(x.vec,1),size(x.vec,2))
+	#have to do this with every mat-vec because we don't necessarily know vector block size a priori.
+	setMetaData(x)
 
 	ccall((:myadjmatvec_,"./mymatmul.so"),Void,(Ref{Complex128},Ref{Complex128},Ref{Complex128}),A,x.vec,newvecs)
 
@@ -285,10 +283,8 @@ function *(x::generalVec, y::generalVec)
     if(x.isCovector && !y.isCovector)
         #PLACEHOLDER; INSERT YOUR ROUTINE HERE
         #retval=x.vec[x.indices1,x.indices2]'*y.vec[y.indices1,y.indices2]
-        m=size(x,2)
-        n=size(x,1)
-	setMetaData(n,m,m) #have to do this to account for different block sizes
-
+	setMetaData(x) #have to do this to account for different block sizes
+	(n,m)=size(x)
         retval=zeros(Complex128,m,m)
         ccall((:myinnerproduct_,"./mymatmul.so"),Void,(Ref{Complex128},Ref{Complex128},Ref{Complex128}),x.vec,y.vec,retval) 
 
