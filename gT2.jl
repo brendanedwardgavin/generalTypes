@@ -31,28 +31,37 @@ isOpAdjoint(A::matrixOp)=A.isAdjoint
 isOpAdjoint(A::compositeOp)=A.isAdjoint
 
 
+struct vec_metadata
+    n::Int32 #use Int32's for Fortran compatibility
+    nvctr::Int32
+    nvctrp::Int32
+end
+
 struct generalVec
     vec::Array{Complex128,2}
     isCovector::Bool
+    md::vec_metadata
 end
 
 #constructor for converting true vectors (Array{T,1}) into the matrix format that generalVec expects (Array{T,2})
 function generalVec(vec::Array{Complex128,1},isCovector::Bool)
-    return generalVec(reshape(vec,length(vec),1),isCovector)
+    md=vec_metadata(length(vec),1,1)
+    return generalVec(reshape(vec,length(vec),1),isCovector,md)
 end
 
 #convenience constructors for generalVec:
 function generalVec(vec::Array{Complex128,2})
-    return generalVec(vec,false)
-end
-function generalVec(vec::Array{Complex128,1})
-    return generalVec(reshape(vec,length(vec),1))
+    md=vec_metadata(size(vec,1),size(vec,2),size(vec,2))
+    return generalVec(vec,false,md)
 end
 
-function setMetaData(x::generalVec)
-    (n,nvctr)=size(x)
-    nvctrp=nvctr
-    ccall((:set_blaswrapper_objects_,"./mymatmul.so"),Void,(Ref{Int32},Ref{Int32},Ref{Int32}),Ref{Int32}(n),Ref{Int32}(nvctr),Ref{Int32}(nvctrp))
+function generalVec(vec::Array{Complex128,2},isCovector::Bool)
+    md=vec_metadata(size(vec,1),size(vec,2),size(vec,2))
+    return generalVec(vec,isCovector,md)
+end
+
+function generalVec(vec::Array{Complex128,1})
+    return generalVec(reshape(vec,length(vec),1))
 end
 
 #constructor for matrixOp; define matrix vector multiplication here
@@ -64,10 +73,7 @@ function matrixOp(A::Array{Complex128,2})
         #newvecs=A*x.vec[x.indices1,x.indices2]
         newvecs=zeros(Complex128,size(x.vec,1),size(x.vec,2))
 
-	#have to do this with every mat-vec because we don't necessarily know vector block size a priori.
-	setMetaData(x)
-
-        ccall((:mymatvec_,"./mymatmul.so"),Void,(Ref{Complex128},Ref{Complex128},Ref{Complex128}),A,x.vec,newvecs)
+        ccall((:mymatvec_,"./mymatmul.so"),Void,(Ref{Complex128},Ref{Complex128},Ref{Complex128},Ref{vec_metadata}),A,x.vec,newvecs,Ref{vec_metadata}(x.md))
 
         return generalVec(newvecs,x.isCovector)  
     end
@@ -77,10 +83,7 @@ function matrixOp(A::Array{Complex128,2})
         #newvecs=A'*x.vec[x.indices1,x.indices2]
         newvecs=zeros(Complex128,size(x.vec,1),size(x.vec,2))
 
-	#have to do this with every mat-vec because we don't necessarily know vector block size a priori.
-	setMetaData(x)
-
-	ccall((:myadjmatvec_,"./mymatmul.so"),Void,(Ref{Complex128},Ref{Complex128},Ref{Complex128}),A,x.vec,newvecs)
+	ccall((:myadjmatvec_,"./mymatmul.so"),Void,(Ref{Complex128},Ref{Complex128},Ref{Complex128},Ref{vec_metadata}),A,x.vec,newvecs,Ref{vec_metadata}(x.md))
 
         return generalVec(newvecs,x.isCovector)
     end
@@ -283,10 +286,10 @@ function *(x::generalVec, y::generalVec)
     if(x.isCovector && !y.isCovector)
         #PLACEHOLDER; INSERT YOUR ROUTINE HERE
         #retval=x.vec[x.indices1,x.indices2]'*y.vec[y.indices1,y.indices2]
-	setMetaData(x) #have to do this to account for different block sizes
+
 	(n,m)=size(x)
         retval=zeros(Complex128,m,m)
-        ccall((:myinnerproduct_,"./mymatmul.so"),Void,(Ref{Complex128},Ref{Complex128},Ref{Complex128}),x.vec,y.vec,retval) 
+        ccall((:myinnerproduct_,"./mymatmul.so"),Void,(Ref{Complex128},Ref{Complex128},Ref{Complex128},Ref{vec_metadata}),x.vec,y.vec,retval,Ref{vec_metadata}(x.md)) 
 
         if(size(retval)==(1,1))
             return retval[1] #return a scalar instead of a 1x1 julia matrix
