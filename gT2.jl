@@ -103,8 +103,7 @@ function userOp(options)
 
   function apply_to_userVec(x::generalVec)
   	  newvecs=zeros(Complex128,size(x.vec,1),size(x.vec,2))
-	  println("ciao, $(size(x.vec,1)),$(size(x.vec,2))")
-          ccall((:apply_op_to_vec_,"./mymatmul.so"),Void,(Ref{metadata_handle},Ref{Complex128},Ref{Complex128}),
+          ccall((:apply_op_to_vec_,"./mymatmul_futile.so"),Void,(Ref{metadata_handle},Ref{Complex128},Ref{Complex128}),
           Ref{metadata_handle}(mh),x.vec,newvecs)
 
         return generalVec(newvecs,x.isCovector)
@@ -112,10 +111,10 @@ function userOp(options)
 
   function apply_adjoint_to_userVec(x::generalVec)
   	  newvecs=zeros(Complex128,size(x.vec,1),size(x.vec,2))
-	  ccall((:op_dagger,"./mymatmul.so"),Void,(Ref{metadata_handle},),Ref{metadata_handle}(mh))
-      ccall((:apply_op_to_vec_,"./mymatmul.so"),Void,(Ref{metadata_handle},Ref{Complex128},Ref{Complex128}),
+	  ccall((:op_dagger,"./mymatmul_futile.so"),Void,(Ref{metadata_handle},),Ref{metadata_handle}(mh))
+      ccall((:apply_op_to_vec_,"./mymatmul_futile.so"),Void,(Ref{metadata_handle},Ref{Complex128},Ref{Complex128}),
       Ref{metadata_handle}(mh),x.vec,newvecs)
-	  ccall((:op_direct_,"./mymatmul.so"),Void,(Ref{metadata_handle},),Ref{metadata_handle}(mh))
+	  ccall((:op_direct_,"./mymatmul_futile.so"),Void,(Ref{metadata_handle},),Ref{metadata_handle}(mh))
 
         return generalVec(newvecs,x.isCovector)
   end
