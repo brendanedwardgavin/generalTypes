@@ -18,18 +18,41 @@ struct matrixOp <: generalOp #subtype of generalOp that stores a matrix to use f
     A::Array{Complex128,2}
     opmult::Function
     adjopmult::Function
-    isAdjoint::Bool 
+    isAdjoint::Bool
 end
+
+mutable struct metadata_handle
+   placehold::NTuple{8,Int64}
+end
+
+struct userOp <: generalOp
+  ptr::Array{Complex128,2}
+  handle:: metadata_handle
+  opmult::Function
+  adjopmult::Function
+  isAdjoint::Bool
+end
+
+struct userVec
+  ptr::Array{Complex128,2}
+  handle:: metadata_handle
+  isCovector::Bool
+end
+
 
 #functions for accessing the same fields from both compositeOp and matrixOp in the same format
 #necessary because abstract types in Julia do not have member fields
+adjOpMult(A::userOp)=A.adjopmult
+opMult(A::userOp)=A.opmult
+isOpAdjoint(A::userOp)=A.isAdjoint
+
+
 adjOpMult(A::compositeOp)=A.adjopmult
 opMult(A::compositeOp)=A.opmult
 adjOpMult(A::matrixOp)=A.adjopmult
 opMult(A::matrixOp)=A.opmult
 isOpAdjoint(A::matrixOp)=A.isAdjoint
 isOpAdjoint(A::compositeOp)=A.isAdjoint
-
 
 struct vec_metadata
     n::Int32 #use Int32's for Fortran compatibility
@@ -45,7 +68,8 @@ end
 
 #constructor for converting true vectors (Array{T,1}) into the matrix format that generalVec expects (Array{T,2})
 function generalVec(vec::Array{Complex128,1},isCovector::Bool)
-    md=vec_metadata(length(vec),1,1)
+    #md=vec_metadata(length(vec),1,1)
+    #ccall((:set_metadata_,"./mymatmul.so"),Void,(Ref{Int32},Ref{Int32},Ref{Int32},Ref{vec_metadata_handle}),length(vec),1,1,Ref{vec_metadata_handle}(md_ptr))
     return generalVec(reshape(vec,length(vec),1),isCovector,md)
 end
 
@@ -64,18 +88,53 @@ function generalVec(vec::Array{Complex128,1})
     return generalVec(reshape(vec,length(vec),1))
 end
 
+function userOp(options)
+
+  mh=metadata_handle((0,0,0,0,0,0,0,0))
+
+  ptr=options["ptr"]
+  ccall((:operator_definition_,"./mymatmul.so"),Void,
+  (Ref{Int32},Ref{Int32},Ref{Int32},Ref{Complex128},Ref{metadata_handle}),
+  Ref{Int32}(options["n"]),
+  Ref{Int32}(options["nvctr"]),
+  Ref{Int32}(options["nvctrp"]),
+  ptr,Ref{metadata_handle}(mh))
+  #ccall((:op_direct_,"./mymatmul.so"),Void,(Ref{metadata_handle},),Ref{metadata_handle}(mh))
+
+  function apply_to_userVec(x::generalVec)
+  	  newvecs=zeros(Complex128,size(x.vec,1),size(x.vec,2))
+	  println("ciao, $(size(x.vec,1)),$(size(x.vec,2))")
+          ccall((:apply_op_to_vec_,"./mymatmul.so"),Void,(Ref{metadata_handle},Ref{Complex128},Ref{Complex128}),
+          Ref{metadata_handle}(mh),x.vec,newvecs)
+
+        return generalVec(newvecs,x.isCovector)
+  end
+
+  function apply_adjoint_to_userVec(x::generalVec)
+  	  newvecs=zeros(Complex128,size(x.vec,1),size(x.vec,2))
+	  ccall((:op_dagger,"./mymatmul.so"),Void,(Ref{metadata_handle},),Ref{metadata_handle}(mh))
+      ccall((:apply_op_to_vec_,"./mymatmul.so"),Void,(Ref{metadata_handle},Ref{Complex128},Ref{Complex128}),
+      Ref{metadata_handle}(mh),x.vec,newvecs)
+	  ccall((:op_direct_,"./mymatmul.so"),Void,(Ref{metadata_handle},),Ref{metadata_handle}(mh))
+
+        return generalVec(newvecs,x.isCovector)
+  end
+
+  return userOp(ptr,mh,apply_to_userVec,apply_adjoint_to_userVec,false)
+end
+
+
 #constructor for matrixOp; define matrix vector multiplication here
 #PLACEHOLDER; insert your routine here
 function matrixOp(A::Array{Complex128,2})
-
     function myMatVec(x::generalVec)
         #Matrix multiply happens here! Replace the next lines with your own code
         #newvecs=A*x.vec[x.indices1,x.indices2]
-        newvecs=zeros(Complex128,size(x.vec,1),size(x.vec,2))
+	newvecs=zeros(Complex128,size(x.vec,1),size(x.vec,2))
 
         ccall((:mymatvec_,"./mymatmul.so"),Void,(Ref{Complex128},Ref{Complex128},Ref{Complex128},Ref{vec_metadata}),A,x.vec,newvecs,Ref{vec_metadata}(x.md))
 
-        return generalVec(newvecs,x.isCovector)  
+        return generalVec(newvecs,x.isCovector)
     end
 
     function myAdjMatVec(x::generalVec)
@@ -102,7 +161,7 @@ end
 
 
 #~~~~~~~~~ Memory methods ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~``
-function getindex(x::generalVec,k,l)    
+function getindex(x::generalVec,k,l)
 
     if(k==Colon()) #then we're extracting a whole generalVec, or several of them
         ll=l
@@ -167,7 +226,7 @@ function setindex!(y::generalVec,x::generalVec,k,l)
 
         if(size(x.vec,1)==length(kk) && size(x.vec,2)==length(ll))
             for i in 1:length(kk)
-                for j in 1:length(ll) 
+                for j in 1:length(ll)
                     y.vec[kk[i],ll[j]]=x.vec[i,j]
                 end
             end
@@ -193,7 +252,7 @@ end
 
 function norm(x::generalVec)
     #PLACEHOLDER; INSERT YOUR ROUTINE HERE
-    return norm(x.vec) 
+    return norm(x.vec)
 end
 
 #perform scalar multiplications y=a*x
@@ -289,13 +348,13 @@ function *(x::generalVec, y::generalVec)
 
 	(n,m)=size(x)
         retval=zeros(Complex128,m,m)
-        ccall((:myinnerproduct_,"./mymatmul.so"),Void,(Ref{Complex128},Ref{Complex128},Ref{Complex128},Ref{vec_metadata}),x.vec,y.vec,retval,Ref{vec_metadata}(x.md)) 
+        ccall((:myinnerproduct_,"./mymatmul.so"),Void,(Ref{Complex128},Ref{Complex128},Ref{Complex128},Ref{vec_metadata}),x.vec,y.vec,retval,Ref{vec_metadata}(x.md))
 
         if(size(retval)==(1,1))
             return retval[1] #return a scalar instead of a 1x1 julia matrix
         else
             return retval
-        end     
+        end
     elseif(x.isCovector == y.isCovector)
         error("Direct products not implemented.")
     else
@@ -322,7 +381,7 @@ function *(A::generalOp, B::generalOp)
     if(isOpAdjoint(B))
         bm=adjOpMult(B)
         bAdjm=opmult(B)
-    end    
+    end
 
     #new left and right multiply functions:
     newmult(x)=am(bm(x))
@@ -346,7 +405,7 @@ function +(A::generalOp, B::generalOp)
     if(isOpAdjoint(B))
         bm=adjOpMult(B)
         bAdjm=opmult(B)
-    end    
+    end
 
     newmult(x)=am(x)+bm(x)
     newAdjmult(x)=aAdjm(x)+bAdjm(x)
@@ -368,7 +427,7 @@ function -(A::generalOp, B::generalOp)
     if(isOpAdjoint(B))
         bm=adjOpMult(B)
         bAdjm=opmult(B)
-    end    
+    end
 
     newmult(x)=am(x)-bm(x)
     newAdjmult(x)=aAdjm(x)-bAdjm(x)
@@ -412,7 +471,7 @@ function +(a::Number, A::generalOp)
     newmult(x)=a*x+am(x)
     newAdjmult(x)=a*x+aAdjm(x)
 
-    return compositeOp(newmult,newAdjmult,false)   
+    return compositeOp(newmult,newAdjmult,false)
 end
 
 #more scalar-operator addition:

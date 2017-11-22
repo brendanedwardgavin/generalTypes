@@ -35,7 +35,10 @@ x0=rand(T,n)
 maxit=50
 eps=1e-5
 
-A=matrixOp(A)
+options=Dict("n" => n, "nvctr" => m, "nvctrp" => m, "ptr" => A)
+
+#A=matrixOp(A)
+A=userOp(options)
 b=generalVec(b)
 x0=generalVec(x0)
 
