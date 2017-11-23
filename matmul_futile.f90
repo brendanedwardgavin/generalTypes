@@ -19,11 +19,13 @@ module wrapper
 contains
 
   subroutine ensure_initialization()
+    use wrapper_MPI
     implicit none
 
     if (.not. initialized) then
       call f_lib_initialize()
       initialized=.true.
+      call mpiinit()
     end if
   end subroutine ensure_initialization
 
@@ -41,74 +43,82 @@ contains
 
     call ensure_initialization()
 
-    call f_routine(id='hamiltonian_init')
+    !call f_routine(id='hamiltonian_init')
     H%n=n
     H%nvctr=nvctr
     H%nvctrp=nvctrp
     H%ptr=f_malloc_ptr([n,n],id='ptr')
     call f_memcpy(src=ptr,dest=H%ptr)
-    call f_release_routine()
+    !!call f_release_routine()
   end subroutine hamiltonian_init
 
   subroutine hamiltonian_free(H)
     use dynamic_memory
     implicit none
     type(hamiltonian), intent(inout) :: H
-
+    !!call f_routine(id='hamiltonian_free')
     call ensure_initialization()
     call f_free_ptr(H%ptr)
     H=hamiltonian_null()
+    !!call f_release_routine()
 
   end subroutine hamiltonian_free
 
-  subroutine hamiltonian_application(H,x,y)
+  subroutine hamiltonian_application(H,x,y,m)
     implicit none
+    integer, intent(in) :: m
     type(hamiltonian), intent(in) :: H
     complex(dp), dimension(H%n,H%nvctr), intent(in) :: x
     complex(dp), dimension(H%n,H%nvctr), intent(inout) :: y
 
     call ensure_initialization()
-    call f_routine(id='hamiltonian_application')
+    !!call f_routine(id='hamiltonian_application')
     !example of parallel implementantion
     !just use zgemm for now
-    call zgemm(H%transa,'N',H%n,H%nvctr,H%n,&
+    call zgemm(H%transa,'N',H%n,m,H%n,&
     1.0d0,H%ptr,H%n,x,H%n,0.0d0,y,H%n)
-    call f_release_routine()
+    !!call f_release_routine()
   end subroutine hamiltonian_application
 
   subroutine conjugate_hamiltonian(H)
     implicit none
     type(hamiltonian), intent(inout) :: H
     call ensure_initialization()
-    call f_routine(id='conjugate_hamiltonian')
+    !!call f_routine(id='conjugate_hamiltonian')
+    print *,'inside conjugate hamiltonian'
     H%transa='C'
-    call f_release_routine()
+    !!call f_release_routine()
   end subroutine conjugate_hamiltonian
 
   subroutine direct_hamiltonian(H)
     implicit none
     type(hamiltonian), intent(inout) :: H
     call ensure_initialization()
-    call f_routine(id='direct_hamiltonian')
+    !!call f_routine(id='direct_hamiltonian')
+    print *,'inside direct hamiltonian'
     H%transa='N'
-    call f_release_routine()
+    !!call f_release_routine()
   end subroutine direct_hamiltonian
 
 end module wrapper
 
-subroutine operator_definition(n,nvctr,nvctrp,ptr,A)
+subroutine op_create(n,nvctr,nvctrp,ptr,A)
   use wrapper
   implicit none
   integer, intent(in) :: n,nvctr,nvctrp
   complex(dp), dimension(n,n), intent(in) :: ptr
   type(operator_container), intent(inout) :: A
+  !local variables
+  type(operator_container), dimension(12) :: Avec
+
+  print *,f_loc(Avec(4))-f_loc(Avec(3)),'size'
 
   allocate(A%H)
   call hamiltonian_init(n,nvctr,nvctrp,ptr,A%H)
-end subroutine operator_definition
+end subroutine op_create
 
 subroutine op_dagger(A)
-  use blaswrapper_setup
+  use wrapper
   implicit none
   type(operator_container), intent(inout) :: A
 
@@ -116,15 +126,22 @@ subroutine op_dagger(A)
 end subroutine op_dagger
 
 subroutine op_direct(A)
-  use blaswrapper_setup
+  use  wrapper
   implicit none
   type(operator_container), intent(inout) :: A
   call direct_hamiltonian(A%H)
 end subroutine op_direct
 
-subroutine apply_op_to_vec(A,x,y)
+subroutine finalize_wrapper()
+  implicit none
+  call mpifinalize()
+  call f_lib_finalize()
+end subroutine finalize_wrapper
+
+subroutine apply_op_to_vec(A,x,y,m)
   use wrapper
   implicit none
+  integer, intent(in) :: m
   type(operator_container), intent(in) :: A
   complex(dp), dimension(*) :: x
   complex(dp), dimension(*) :: y
@@ -134,9 +151,17 @@ subroutine apply_op_to_vec(A,x,y)
      call f_err_throw('The Hamiltionian operator is not correctly associated')
      return
   end if
-  call hamiltonian_application(A%H,x,y)
+  call hamiltonian_application(A%H,x,y,m)
 
 end subroutine apply_op_to_vec
+
+subroutine op_release(A)
+  use wrapper
+  implicit none
+  type(operator_container), intent(inout) :: A
+  call hamiltonian_free(A%H)
+  deallocate(A%H)
+end subroutine op_release
 
 !a=x'*y
 subroutine myInnerProduct(x,y,a,vec_metadata)

@@ -46,3 +46,5 @@ x0=generalVec(x0)
 x=zbicgstab(A,b,x0,maxit,eps)
 
 println("Residual = ",norm(b-A*x)/norm(b))
+
+finalize(A)
