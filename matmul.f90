@@ -1,15 +1,13 @@
 module blaswrapper_setup
   implicit none
+
   type, public :: metaparams
      integer :: n=0 !<size of matrix A and B (subspace)
      integer :: nvctr=0 !< number of componenets for each of the vector of the subspace
-     integer :: nvctrp=0 !, local amount of componenet stored by the processor (for parallel implmentation)
-  end type
+     integer :: nvctrp=0
+  end type metaparams
 
-end module
-
-
-
+end module blaswrapper_setup
 
 !matrix multiplication y=A*x
 subroutine mymatvec(A,x,y,vec_metadata)
