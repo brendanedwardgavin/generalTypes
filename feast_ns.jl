@@ -37,7 +37,7 @@ function feast_nsR(A,B,x0,nc,emid,r,eps,maxit)
     res=1.0
     Q=copy(x)
     Qk=zeros(x)
-    while it<maxit && abs(res)>abs(eps)
+    while it<maxit && abs.(res)>abs.(eps)
         it=it+1 
 
         #orthogonalize subspace with SVD:
@@ -67,7 +67,7 @@ function feast_nsR(A,B,x0,nc,emid,r,eps,maxit)
         ninside=0
         ninside_real=0
         for j in 1:m0
-            if(abs(lest[j]-emid)<abs(r))
+            if(abs.(lest[j]-emid)<abs.(r))
                 ninside=ninside+1
             end
         end
@@ -84,7 +84,7 @@ function feast_nsR(A,B,x0,nc,emid,r,eps,maxit)
         #println(lest," ",ninside_real)
 
         #get distances of estimated eigenvalues from middle of contour:
-        lestdif=abs(lest.-emid)
+        lestdif=abs.(lest.-emid)
         #sort eigenpairs based on those distances:
         p=sortperm(lestdif)     
  
