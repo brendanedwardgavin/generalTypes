@@ -68,7 +68,7 @@ end
 
 #constructor for converting true vectors (Array{T,1}) into the matrix format that generalVec expects (Array{T,2})
 function generalVec(vec::Array{Complex128,1},isCovector::Bool)
-    #md=vec_metadata(length(vec),1,1)
+    md=vec_metadata(length(vec),1,1)
     #ccall((:set_metadata_,"./mymatmul.so"),Void,(Ref{Int32},Ref{Int32},Ref{Int32},Ref{vec_metadata_handle}),length(vec),1,1,Ref{vec_metadata_handle}(md_ptr))
     return generalVec(reshape(vec,length(vec),1),isCovector,md)
 end
