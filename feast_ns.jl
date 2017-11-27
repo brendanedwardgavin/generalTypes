@@ -125,17 +125,19 @@ function feast_nsR(A,B,x0,nc,emid,r,eps,maxit)
         end=#
 
         Q[:]=0.0
-        bcgx0=zeros(Q[:,1])
+        #bcgx0=zeros(Q[:,1])
+	bcgx0=zeros(Q)
         for j in 1:nc
             println("        CP $j of $nc")
             z=emid+r*exp(im*(gk[j]*pi+pi+offset))
             #Qk=\(z*B-A,B*x)
-            Qk[:]=0.0
+            #Qk[:]=0.0
             Bx=B*x
-            for i in 1:m0
+            Qk=zbicgstabBlock(z*B-A,Bx,bcgx0,500,min(res*1e-2,1e-2))
+            #for i in 1:m0
                 #Qk[:,i]=\(z*B-A,(B*x)[:,i])
-                Qk[:,i]=zbicgstab(z*B-A,Bx[:,i],bcgx0,500,min(res*1e-2,1e-2))
-            end
+            #    Qk[:,i]=zbicgstab(z*B-A,Bx[:,i],bcgx0,500,min(res*1e-2,1e-2))
+            #end
             Q=Q+wk[j]*exp(im*(gk[j]*pi+pi+offset))*Qk
         end
     end

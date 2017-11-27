@@ -148,7 +148,7 @@ function zbicgstabBlock(A,b,x0,maxit,eps)
 
 			
 		rs=sqrt.(diag(r'*r))
-		println("   $i     $(maximum(abs.(rs)))   $(norm(Aw))")
+		#println("   $i     $(maximum(abs.(rs)))   $(norm(Aw))")
 		#if(norm(r)<eps)
 		if(maximum(abs.(rs))<eps)
 			#println("r finish: $(norm(r))")

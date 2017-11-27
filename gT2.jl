@@ -5,6 +5,13 @@ TODO:
 ---Allocate new memory when doing Y=X[:,j]?? Or when doing arithmetic operations and memory copies? Probably best to do it in getindex; need to change this
 =#
 
+function exiting()
+    println("Custom exit")
+    ccall((:finalize_wrapper_,"./mymatmul_futile.so"),Void,())
+end
+
+atexit(exiting)
+
 abstract type generalOp end
 
 struct compositeOp <: generalOp #subtype of generalOp for building composite linear maps, e.g. A=B*C+z*D
@@ -22,15 +29,23 @@ struct matrixOp <: generalOp #subtype of generalOp that stores a matrix to use f
 end
 
 mutable struct metadata_handle
-   placehold::NTuple{8,Int64}
+   placehold::NTuple{128,Int64}
 end
 
-struct userOp <: generalOp
+mutable struct userOp <: generalOp
   ptr::Array{Complex128,2}
-  handle:: metadata_handle
+  handle:: Array{Int32,1}
   opmult::Function
   adjopmult::Function
   isAdjoint::Bool
+  function userOp(ptr1,handle1,opmult1,adjOpMult1,isAdjoint1)
+      instance=new(ptr1,handle1,opmult1,adjOpMult1,isAdjoint1)
+     function free_userOp(x)
+         ccall((:op_release_,"./mymatmul_futile.so"),Void,(Ref{Int32},),x.handle)
+      end
+      finalizer(instance,free_userOp)
+      return instance
+  end
 end
 
 struct userVec
@@ -69,7 +84,6 @@ end
 #constructor for converting true vectors (Array{T,1}) into the matrix format that generalVec expects (Array{T,2})
 function generalVec(vec::Array{Complex128,1},isCovector::Bool)
     md=vec_metadata(length(vec),1,1)
-    #ccall((:set_metadata_,"./mymatmul.so"),Void,(Ref{Int32},Ref{Int32},Ref{Int32},Ref{vec_metadata_handle}),length(vec),1,1,Ref{vec_metadata_handle}(md_ptr))
     return generalVec(reshape(vec,length(vec),1),isCovector,md)
 end
 
@@ -85,41 +99,45 @@ function generalVec(vec::Array{Complex128,2},isCovector::Bool)
 end
 
 function generalVec(vec::Array{Complex128,1})
-    return generalVec(reshape(vec,length(vec),1))
+    #md=vec_metadata(size(vec,1),size(vec,2),size(vec,2))
+    return generalVec(reshape(vec,length(vec),1))#,md)
 end
 
 function userOp(options)
 
-  mh=metadata_handle((0,0,0,0,0,0,0,0))
+  mh=zeros(Int32,128)
 
   ptr=options["ptr"]
-  ccall((:operator_definition_,"./mymatmul.so"),Void,
-  (Ref{Int32},Ref{Int32},Ref{Int32},Ref{Complex128},Ref{metadata_handle}),
+  ccall((:op_create_,"./mymatmul_futile.so"),Void,
+  (Ref{Int32},Ref{Int32},Ref{Int32},Ref{Complex128},Ref{Int32}),
   Ref{Int32}(options["n"]),
   Ref{Int32}(options["nvctr"]),
   Ref{Int32}(options["nvctrp"]),
-  ptr,Ref{metadata_handle}(mh))
+  ptr,mh)
+
   #ccall((:op_direct_,"./mymatmul.so"),Void,(Ref{metadata_handle},),Ref{metadata_handle}(mh))
 
   function apply_to_userVec(x::generalVec)
-  	  newvecs=zeros(Complex128,size(x.vec,1),size(x.vec,2))
-          ccall((:apply_op_to_vec_,"./mymatmul_futile.so"),Void,(Ref{metadata_handle},Ref{Complex128},Ref{Complex128}),
-          Ref{metadata_handle}(mh),x.vec,newvecs)
-
+      m=size(x.vec,2)
+      newvecs=zeros(Complex128,size(x.vec,1),m)
+      ccall((:op_direct_,"./mymatmul_futile.so"),Void,(Ref{Int32},),mh)
+      ccall((:apply_op_to_vec_,"./mymatmul_futile.so"),Void,(Ref{Int32},Ref{Complex128},Ref{Complex128},Ref{Int32}),
+      mh,x.vec,newvecs,Ref{Int32}(m))
+      #newvecs=ptr*x.vec
         return generalVec(newvecs,x.isCovector)
   end
 
   function apply_adjoint_to_userVec(x::generalVec)
-  	  newvecs=zeros(Complex128,size(x.vec,1),size(x.vec,2))
-	  ccall((:op_dagger,"./mymatmul_futile.so"),Void,(Ref{metadata_handle},),Ref{metadata_handle}(mh))
-      ccall((:apply_op_to_vec_,"./mymatmul_futile.so"),Void,(Ref{metadata_handle},Ref{Complex128},Ref{Complex128}),
-      Ref{metadata_handle}(mh),x.vec,newvecs)
-	  ccall((:op_direct_,"./mymatmul_futile.so"),Void,(Ref{metadata_handle},),Ref{metadata_handle}(mh))
-
+      m=size(x.vec,2)
+      newvecs=zeros(Complex128,size(x.vec,1),m)
+	  ccall((:op_dagger_,"./mymatmul_futile.so"),Void,(Ref{Int32},),mh)
+      ccall((:apply_op_to_vec_,"./mymatmul_futile.so"),Void,(Ref{Int32},Ref{Complex128},Ref{Complex128},Ref{Int32}),
+      mh,x.vec,newvecs,Ref{Int32}(m))
+      #newvecs=ptr'*x.vec
         return generalVec(newvecs,x.isCovector)
   end
-
-  return userOp(ptr,mh,apply_to_userVec,apply_adjoint_to_userVec,false)
+  x= userOp(ptr,mh,apply_to_userVec,apply_adjoint_to_userVec,false)
+  return x
 end
 
 
@@ -148,6 +166,7 @@ function matrixOp(A::Array{Complex128,2})
 
     return matrixOp(A,myMatVec,myAdjMatVec,false)
 end
+
 
 #function for printing generalVecs
 function Base.show(io::IO, x::generalVec)

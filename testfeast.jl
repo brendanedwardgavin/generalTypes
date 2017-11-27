@@ -31,11 +31,15 @@ y0=rand(T,n,m0)
 B=eye(T,n)
 
 
+#A=matrixOp(A)
+options=Dict("n" => n, "nvctr" => m0, "nvctrp" => m0, "ptr" => A)
+
 A=matrixOp(A)
+#A=userOp(options)
 B=matrixOp(B)
+#B=userOp(Dict("n" => n, "nvctr" => m0, "nvctrp" => m0, "ptr" => B))
 x0=generalVec(x0)
 
 (l,x)=feast_nsR(A,B,x0,nc,emid,r,eps,maxit)
-#(l,x)=feast_ns_it(A,eye(n),x0,x0,6,emid,r,1e-5,100)
 
 println(l)
