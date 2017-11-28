@@ -1,6 +1,3 @@
-
-
-
 function trapezoidal(nc)
     points=zeros(nc)
     weights=zeros(nc)
@@ -276,3 +273,120 @@ function solveFeastCP(k,nc,emid,r,offset,res,wk,gk,A,B,x)
     end
     return (wk[k]*exp(im*(gk[k]*pi+pi+offset)))*Qk
 end
+
+
+#linear feast for finding right eigenvectors
+function feast_nsR_MPI(comm,col,A,B,x0,nc,emid,r,eps,maxit)
+
+    (n,m0)=size(x0)
+    lest=zeros(m0)
+    x=copy(x0)
+   
+    (gk,wk)=trapezoidal(nc)
+    offset=pi/nc #offset angle of first quadrature point; makes sure it isn't on real axis
+
+    residuals=zeros(m0)
+    p=sortperm(residuals)
+
+    it=0
+    res=1.0
+    ninside=m0
+    res=1.0
+    Q=copy(x)
+    Qk=zeros(x)
+    while it<maxit && abs.(res)>abs.(eps)
+        it=it+1 
+
+        #orthogonalize subspace with SVD:
+        Bq=Q'*B*Q
+        (ll,qq)=eig(Bq)
+        
+        nremove=0
+        maxll=maximum(abs.(ll))
+        for i in 1:m0
+            if(abs.(ll[i]/maxll)<1e-10) #arbitrary singular value cutoff
+                nremove=nremove+1
+            end
+        end
+        if(nremove>0)
+            print("<$col> Subspace too large, resizing: $(m0-nremove)\n")
+        end
+        print("<$col>     Smallest s=$(minimum(abs.(ll[nremove+1:m0]))/maximum(abs.(ll)))\n" )
+        p=sortperm(abs.(ll))
+        U=Q*qq[:,p[nremove+1:m0]]*diagm(1./sqrt.(ll[p[nremove+1:m0]]))
+        m0=m0-nremove
+        #(Qq,Rq)=qr(Q)
+        
+        Aq=U'*A*U
+        Bq=U'*B*U
+
+        (lest,xq)=eig(Aq,Bq)
+
+        x=U*xq
+
+        for j in 1:m0
+            x[:,j]=x[:,j]/norm(x[:,j])
+        end
+        
+        resvecs=A*x-B*x*diagm(lest)
+        residuals=zeros(m0)
+
+        for j in 1:m0
+            residuals[j]=norm(resvecs[:,j])
+        end 
+
+        ninside=0
+        ninside_real=0
+        for j in 1:m0
+            if(abs.(lest[j]-emid)<abs.(r))
+                ninside=ninside+1
+            end
+        end
+
+        if(ninside>m0)
+            error("Number of eigenvalues inside contour is greater than the subspace dimension M0")
+        end
+
+        ninside_real=ninside
+        if(ninside==0)
+            ninside = m0
+        end
+        
+        #println(lest," ",ninside_real)
+
+        #get distances of estimated eigenvalues from middle of contour:
+        lestdif=abs.(lest.-emid)
+        #sort eigenpairs based on those distances:
+        p=sortperm(lestdif)     
+ 
+        #p=sortperm(residuals)
+        res=residuals[p[ninside]]
+        
+        print("<$col>    $it: $(residuals[p[ninside]])   $ninside_real\n")
+
+        if(res<eps)
+            break
+        end
+
+        Q[:]=0.0
+        #bcgx0=zeros(Q[:,1])
+	bcgx0=zeros(Q)
+        for j in 1:nc
+            print("<$col>        CP $j of $nc\n")
+            z=emid+r*exp(im*(gk[j]*pi+pi+offset))
+            #Qk=\(z*B-A,B*x)
+            #Qk[:]=0.0
+            Bx=B*x
+            Qk=zbicgstabBlock(z*B-A,Bx,bcgx0,500,min(res*1e-2,1e-2))
+            #for i in 1:m0
+                #Qk[:,i]=\(z*B-A,(B*x)[:,i])
+            #    Qk[:,i]=zbicgstab(z*B-A,Bx[:,i],bcgx0,500,min(res*1e-2,1e-2))
+            #end
+            Q=Q+wk[j]*exp(im*(gk[j]*pi+pi+offset))*Qk
+        end
+    end
+   
+   return (lest,x) 
+end
+
+
