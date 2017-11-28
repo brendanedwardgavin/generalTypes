@@ -23,6 +23,24 @@ function commSplit(comm,color,key)
     commSplit=newcomm
 end function commSplit
 
+
+subroutine MPI_zAllReduceSum(sendbuf,recvbuf,lecount,comm)
+    use mpi
+    implicit none
+    complex*16, dimension(*) :: sendbuf,recvbuf
+    integer :: lecount,ierr,comm
+
+    call MPI_AllReduce(sendbuf,recvbuf,lecount,MPI_DOUBLE_COMPLEX, MPI_SUM,comm,ierr)
+    
+end
+
+!subroutine mpiBarrier(comm)
+!    use mpi
+!    implicit none
+!   integer :: comm
+!    call MPI_Barrier(comm)
+!end
+
 function getMPIsize(comm)
     use mpi
     implicit none

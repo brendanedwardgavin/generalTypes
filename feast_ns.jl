@@ -277,6 +277,8 @@ end
 
 #linear feast for finding right eigenvectors
 function feast_nsR_MPI(comm,col,A,B,x0,nc,emid,r,eps,maxit)
+    myrank=MPI_Comm_rank(comm)
+    nproc=MPI_Comm_size(comm)
 
     (n,m0)=size(x0)
     lest=zeros(m0)
@@ -293,6 +295,7 @@ function feast_nsR_MPI(comm,col,A,B,x0,nc,emid,r,eps,maxit)
     ninside=m0
     res=1.0
     Q=copy(x)
+    Qlocal=zeros(Q)
     Qk=zeros(x)
     while it<maxit && abs.(res)>abs.(eps)
         it=it+1 
@@ -311,7 +314,11 @@ function feast_nsR_MPI(comm,col,A,B,x0,nc,emid,r,eps,maxit)
         if(nremove>0)
             print("<$col> Subspace too large, resizing: $(m0-nremove)\n")
         end
-        print("<$col>     Smallest s=$(minimum(abs.(ll[nremove+1:m0]))/maximum(abs.(ll)))\n" )
+        MPI_Barrier(comm)
+        if(myrank==0) 
+            print("<$col>     Smallest s=$(minimum(abs.(ll[nremove+1:m0]))/maximum(abs.(ll)))\n" )
+        end
+        MPI_Barrier(comm)
         p=sortperm(abs.(ll))
         U=Q*qq[:,p[nremove+1:m0]]*diagm(1./sqrt.(ll[p[nremove+1:m0]]))
         m0=m0-nremove
@@ -361,29 +368,41 @@ function feast_nsR_MPI(comm,col,A,B,x0,nc,emid,r,eps,maxit)
  
         #p=sortperm(residuals)
         res=residuals[p[ninside]]
-        
-        print("<$col>    $it: $(residuals[p[ninside]])   $ninside_real\n")
+       
+        MPI_Barrier(comm)
+        if(myrank==0) 
+            print("<$col>    $it: $(residuals[p[ninside]])   $ninside_real\n")
+        end
+        MPI_Barrier(comm)        
 
         if(res<eps)
             break
         end
 
         Q[:]=0.0
+        Qlocal[:]=0.0
         #bcgx0=zeros(Q[:,1])
 	bcgx0=zeros(Q)
         for j in 1:nc
-            print("<$col>        CP $j of $nc\n")
-            z=emid+r*exp(im*(gk[j]*pi+pi+offset))
-            #Qk=\(z*B-A,B*x)
-            #Qk[:]=0.0
-            Bx=B*x
-            Qk=zbicgstabBlock(z*B-A,Bx,bcgx0,500,min(res*1e-2,1e-2))
-            #for i in 1:m0
-                #Qk[:,i]=\(z*B-A,(B*x)[:,i])
-            #    Qk[:,i]=zbicgstab(z*B-A,Bx[:,i],bcgx0,500,min(res*1e-2,1e-2))
-            #end
-            Q=Q+wk[j]*exp(im*(gk[j]*pi+pi+offset))*Qk
+
+            if(mod(j-1,nproc)==myrank)
+                print("<$col>        CP $j of $nc  {$myrank}\n")
+                z=emid+r*exp(im*(gk[j]*pi+pi+offset))
+                #Qk=\(z*B-A,B*x)
+                #Qk[:]=0.0
+                Bx=B*x
+                Qk=zbicgstabBlock(z*B-A,Bx,bcgx0,500,min(res*1e-2,1e-2))
+                #for i in 1:m0
+                    #Qk[:,i]=\(z*B-A,(B*x)[:,i])
+                #    Qk[:,i]=zbicgstab(z*B-A,Bx[:,i],bcgx0,500,min(res*1e-2,1e-2))
+                #end
+                Qlocal=Qlocal+wk[j]*exp(im*(gk[j]*pi+pi+offset))*Qk
+            end
         end
+        MPI_Barrier(comm) 
+        #Q[:]=Qlocal
+        MPI_zAllReduceSum(Qlocal.vec,Q.vec,comm)
+        
     end
    
    return (lest,x) 
