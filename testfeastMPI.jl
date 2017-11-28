@@ -22,21 +22,27 @@ L=diagm(1.0*collect(1:n))
 #L=diagm(rand(n))
 A=Q*L*inv(Q)
 #A=rand(n,n)
+B=eye(T,n)
 
-ncontour=2
+
+
+
+#FEAST parameters:
+ncontour=1
 emin=9.5
 emax=50.5
 m0t=50
 m0=convert(Int64,ceil(m0t/ncontour))
-nc=6
+nc=4
 eps=1e-14
 maxit=100
 x0=rand(T,n,m0)
 y0=rand(T,n,m0)
 
-B=eye(T,n)
 
 
+
+#Custom Type wrappers:
 #A=matrixOp(A)
 options=Dict("n" => n, "nvctr" => m0, "nvctrp" => m0, "ptr" => A)
 
@@ -46,6 +52,10 @@ B=matrixOp(B)
 #B=userOp(Dict("n" => n, "nvctr" => m0, "nvctrp" => m0, "ptr" => B))
 x0=generalVec(x0)
 
+
+
+
+#Parallelization:
 MPI_COMM_WORLD=mpiworld()
 nprocs=MPI_Comm_size(MPI_COMM_WORLD)
 myrank=MPI_Comm_rank(MPI_COMM_WORLD)
@@ -59,6 +69,10 @@ delta=(emax-emin)/ncontour
 
 emid=emin+color*delta+r
 
+
+
+
+#Run FEAST:
 (l,x)=feast_nsR_MPI(contourcomm,color,A,B,x0,nc,emid,r,eps,maxit)
 
 println(l)
