@@ -42,6 +42,5 @@ B=userOp(Dict("n" => n, "nvctr" => m0, "nvctrp" => m0, "ptr" => B))
 x0=generalVec(x0)
 
 (l,x)=feast_nsR(A,B,x0,nc,emid,r,eps,maxit)
-#(l,x)=feast_ns_it(A,eye(n),x0,x0,6,emid,r,1e-5,100)
 
 println(l)

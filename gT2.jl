@@ -46,6 +46,7 @@ mutable struct userOp <: generalOp
       finalizer(instance,free_userOp)
       return instance
   end
+  end
 end
 
 #functions for accessing the same fields from both compositeOp and matrixOp in the same format
@@ -181,6 +182,7 @@ function matrixOp(A::Array{Complex128,2})
 end
 
 
+
 #function for printing generalVecs
 function Base.show(io::IO, x::generalVec)
     if(x.isCovector)
@@ -247,6 +249,37 @@ function setindex!(y::generalVec,x::generalVec,k,l)
     end
     if(ll==Colon())
         ll=1:size(y.vec,2)
+    end
+
+    if(k!=Colon())
+        error("Addressing submatrices of subspaces not supported yet.")
+    end
+
+    if(x.isCovector==y.isCovector)
+
+        if(size(x.vec,1)==length(kk) && size(x.vec,2)==length(ll))
+            for i in 1:length(kk)
+                for j in 1:length(ll)
+                    y.vec[kk[i],ll[j]]=x.vec[i,j]
+                end
+            end
+        else
+            error("Shape mismatch between input and output")
+        end
+    else
+        error("Tried assigning a vector to a covector, or vice versa")
+    end
+end
+
+function setindex!(y::generalVec,x::generalVec,k)
+    kk=k
+    ll=1
+    ll=1:size(y.vec,2)
+    l=ll
+    if(k==Colon())
+        kk=1:size(y.vec,1)
+    else
+        error("Setindex not implemented for single index when k!=colon")
     end
 
     if(k!=Colon())
