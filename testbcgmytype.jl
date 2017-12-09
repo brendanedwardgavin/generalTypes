@@ -35,7 +35,7 @@ x0=rand(T,n)
 maxit=50
 eps=1e-5
 
-options=Dict("n" => n, "nvctr" => m, "nvctrp" => m, "ptr" => A)
+options=Dict("n" => n, "nvctr" => m, "nvctrp" => m, "ptr" => A) #,"allow_mpi" => True)
 
 #A=matrixOp(A)
 A=userOp(options)

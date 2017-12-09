@@ -48,13 +48,6 @@ mutable struct userOp <: generalOp
   end
 end
 
-struct userVec
-  ptr::Array{Complex128,2}
-  handle:: metadata_handle
-  isCovector::Bool
-end
-
-
 #functions for accessing the same fields from both compositeOp and matrixOp in the same format
 #necessary because abstract types in Julia do not have member fields
 adjOpMult(A::userOp)=A.adjopmult
@@ -75,11 +68,31 @@ struct vec_metadata
     nvctrp::Int32
 end
 
-struct generalVec
+abstract type myVec end
+
+struct generalVec <: myVec
     vec::Array{Complex128,2}
     isCovector::Bool
     md::vec_metadata
 end
+
+getHandle(V::generalVec)=V.vec
+
+mutable struct userVec <: myVec
+  ptr::Array{Complex128,2}
+  isCovector::Bool
+  md::vec_metadata #to be removed
+  handle:: Array{Int32,1}
+  function userVec(ptr1,isCovector1,md1,handle1)
+    instance=new(ptr1,isCovector1,md1,handle1)
+    function free_userVec(x)
+    	     ccall((:vec_release_,"./mymatmul_futile.so"),Void,(Ref{Int32},),x.handle)
+    end
+    finalizer(instance,free_userVec)
+  return instance
+  end
+end
+
 
 #constructor for converting true vectors (Array{T,1}) into the matrix format that generalVec expects (Array{T,2})
 function generalVec(vec::Array{Complex128,1},isCovector::Bool)
@@ -118,12 +131,12 @@ function userOp(options)
   #ccall((:op_direct_,"./mymatmul.so"),Void,(Ref{metadata_handle},),Ref{metadata_handle}(mh))
 
   function apply_to_userVec(x::generalVec)
-      m=size(x.vec,2)
-      newvecs=zeros(Complex128,size(x.vec,1),m)
+      ptr=getHandle(x)
+      m=size(ptr,2)
+      newvecs=zeros(Complex128,size(ptr,1),m)
       ccall((:op_direct_,"./mymatmul_futile.so"),Void,(Ref{Int32},),mh)
       ccall((:apply_op_to_vec_,"./mymatmul_futile.so"),Void,(Ref{Int32},Ref{Complex128},Ref{Complex128},Ref{Int32}),
-      mh,x.vec,newvecs,Ref{Int32}(m))
-      #newvecs=ptr*x.vec
+      mh,ptr,newvecs,Ref{Int32}(m))
         return generalVec(newvecs,x.isCovector)
   end
 
