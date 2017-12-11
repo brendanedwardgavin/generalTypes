@@ -37,8 +37,8 @@ eps=1e-5
 
 options=Dict("n" => n, "nvctr" => m, "nvctrp" => m, "ptr" => A) #,"allow_mpi" => True)
 
-A=matrixOp(A)
-#A=userOp(options)
+#A=matrixOp(A)
+A=userOp(options)
 b=generalVec(b)
 x0=generalVec(x0)
 
