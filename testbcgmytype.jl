@@ -35,10 +35,10 @@ x0=rand(T,n,m)
 maxit=50
 eps=1e-5
 
-options=Dict("n" => n, "nvctr" => m, "nvctrp" => m, "ptr" => A)
+options=Dict("n" => n, "nvctr" => m, "nvctrp" => m, "ptr" => A) #,"allow_mpi" => True)
 
-A=matrixOp(A)
-#A=userOp(options)
+#A=matrixOp(A)
+A=userOp(options)
 b=generalVec(b)
 x0=generalVec(x0)
 
@@ -51,3 +51,5 @@ x0=generalVec(x0)
 
 
 println("Residual = ",norm(b-A*x)/norm(b))
+
+finalize(A)

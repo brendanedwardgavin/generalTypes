@@ -48,38 +48,56 @@ mutable struct userOp <: generalOp
   end
 end
 
-struct userVec
-  ptr::Array{Complex128,2}
-  handle:: metadata_handle
-  isCovector::Bool
-end
-
-
-#functions for accessing the same fields from both compositeOp and matrixOp in the same format
-#necessary because abstract types in Julia do not have member fields
-adjOpMult(A::userOp)=A.adjopmult
-opMult(A::userOp)=A.opmult
-isOpAdjoint(A::userOp)=A.isAdjoint
-
-
-adjOpMult(A::compositeOp)=A.adjopmult
-opMult(A::compositeOp)=A.opmult
-adjOpMult(A::matrixOp)=A.adjopmult
-opMult(A::matrixOp)=A.opmult
-isOpAdjoint(A::matrixOp)=A.isAdjoint
-isOpAdjoint(A::compositeOp)=A.isAdjoint
-
 struct vec_metadata
     n::Int32 #use Int32's for Fortran compatibility
     nvctr::Int32
     nvctrp::Int32
 end
 
-struct generalVec
+abstract type myVec end
+
+struct generalVec <: myVec
     vec::Array{Complex128,2}
     isCovector::Bool
     md::vec_metadata
 end
+
+mutable struct userVec <: myVec
+  ptr::Array{Complex128,2}
+  isCovector::Bool
+  md::vec_metadata #to be removed
+  handle:: Array{Int32,1}
+  function userVec(ptr1,isCovector1,md1,handle1)
+    instance=new(ptr1,isCovector1,md1,handle1)
+    function free_userVec(x)
+    	     ccall((:vec_release_,"./mymatmul_futile.so"),Void,(Ref{Int32},),x.handle)
+    end
+    finalizer(instance,free_userVec)
+  return instance
+  end
+end
+
+
+#
+
+#functions for accessing the same fields from both compositeOp and matrixOp in the same format
+#necessary because abstract types in Julia do not have member fields
+adjOpMult(A::userOp)=A.adjopmult
+adjOpMult(A::compositeOp)=A.adjopmult
+adjOpMult(A::matrixOp)=A.adjopmult
+
+opMult(A::userOp)=A.opmult
+opMult(A::compositeOp)=A.opmult
+opMult(A::matrixOp)=A.opmult
+
+
+isOpAdjoint(A::userOp)=A.isAdjoint
+isOpAdjoint(A::matrixOp)=A.isAdjoint
+isOpAdjoint(A::compositeOp)=A.isAdjoint
+
+getHandle(V::generalVec)=V.vec
+isVecKet(V::generalVec)= !V.isCovector
+isVecBra(V::generalVec)=V.isCovector
 
 #constructor for converting true vectors (Array{T,1}) into the matrix format that generalVec expects (Array{T,2})
 function generalVec(vec::Array{Complex128,1},isCovector::Bool)
@@ -117,24 +135,33 @@ function userOp(options)
 
   #ccall((:op_direct_,"./mymatmul.so"),Void,(Ref{metadata_handle},),Ref{metadata_handle}(mh))
 
-  function apply_to_userVec(x::generalVec)
-      m=size(x.vec,2)
-      newvecs=zeros(Complex128,size(x.vec,1),m)
+  function apply_to_userVec(x::myVec) #generalVec)
+      ptr=getHandle(x)
+      #m=size(ptr,2)
+      if isVecBra(x)
+          error("The Direct operator cannot be applied on a covector")
+      end
+      #newvecs=zeros(Complex128,size(ptr,1),m)
+      result=zeros(x)
+      newvecs=getHandle(result)
       ccall((:op_direct_,"./mymatmul_futile.so"),Void,(Ref{Int32},),mh)
       ccall((:apply_op_to_vec_,"./mymatmul_futile.so"),Void,(Ref{Int32},Ref{Complex128},Ref{Complex128},Ref{Int32}),
-      mh,x.vec,newvecs,Ref{Int32}(m))
-      #newvecs=ptr*x.vec
-        return generalVec(newvecs,x.isCovector)
+      mh,ptr,newvecs,Ref{Int32}(m))
+        return result #generalVec(newvecs,false)
   end
 
   function apply_adjoint_to_userVec(x::generalVec)
-      m=size(x.vec,2)
-      newvecs=zeros(Complex128,size(x.vec,1),m)
+      ptr=getHandle(x)
+      if isVecKet(x)
+          error("The Adjoint operator cannot be applied on a vector")
+      end
+      result=zeros(x)
+      newvecs=getHandle(result)
 	  ccall((:op_dagger_,"./mymatmul_futile.so"),Void,(Ref{Int32},),mh)
       ccall((:apply_op_to_vec_,"./mymatmul_futile.so"),Void,(Ref{Int32},Ref{Complex128},Ref{Complex128},Ref{Int32}),
-      mh,x.vec,newvecs,Ref{Int32}(m))
+      mh,ptr,newvecs,Ref{Int32}(m))
       #newvecs=ptr'*x.vec
-        return generalVec(newvecs,x.isCovector)
+        return result #generalVec(newvecs,x.isCovector)
   end
   x= userOp(ptr,mh,apply_to_userVec,apply_adjoint_to_userVec,false)
   return x
@@ -145,11 +172,12 @@ end
 #PLACEHOLDER; insert your routine here
 function matrixOp(A::Array{Complex128,2})
     function myMatVec(x::generalVec)
+        ptr=getHandle(x)
         #Matrix multiply happens here! Replace the next lines with your own code
         #newvecs=A*x.vec[x.indices1,x.indices2]
-	newvecs=zeros(Complex128,size(x.vec,1),size(x.vec,2))
+	newvecs=zeros(Complex128,size(ptr,1),size(ptr,2))
 
-        ccall((:mymatvec_,"./mymatmul.so"),Void,(Ref{Complex128},Ref{Complex128},Ref{Complex128},Ref{vec_metadata}),A,x.vec,newvecs,Ref{vec_metadata}(x.md))
+        ccall((:mymatvec_,"./mymatmul.so"),Void,(Ref{Complex128},Ref{Complex128},Ref{Complex128},Ref{vec_metadata}),A,ptr,newvecs,Ref{vec_metadata}(x.md))
 
         return generalVec(newvecs,x.isCovector)
     end
@@ -166,6 +194,7 @@ function matrixOp(A::Array{Complex128,2})
 
     return matrixOp(A,myMatVec,myAdjMatVec,false)
 end
+
 
 
 #function for printing generalVecs
@@ -196,7 +225,8 @@ end
 #vector of all zeros
 #PLACEHOLDER; insert your own routine here
 function zeros(x::generalVec)
-    newvec=zeros(Complex128,size(x.vec,1),size(x.vec,2))
+    ptr=getHandle(x)
+    newvec=zeros(Complex128,size(ptr,1),size(ptr,2))
     return generalVec(newvec,x.isCovector)
 end
 

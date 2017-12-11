@@ -21,7 +21,7 @@ function feast_nsR(A,B,x0,nc,emid,r,eps,maxit)
     (n,m0)=size(x0)
     lest=zeros(m0)
     x=copy(x0)
-   
+
     (gk,wk)=trapezoidal(nc)
     offset=pi/nc #offset angle of first quadrature point; makes sure it isn't on real axis
 
@@ -35,7 +35,7 @@ function feast_nsR(A,B,x0,nc,emid,r,eps,maxit)
     Q=copy(x)
     Qk=zeros(x)
     while it<maxit && abs.(res)>abs.(eps)
-        it=it+1 
+        it=it+1
 
         #orthogonalize subspace with SVD:
         Bq=Q'*B*Q
@@ -68,13 +68,13 @@ function feast_nsR(A,B,x0,nc,emid,r,eps,maxit)
         for j in 1:m0
             x[:,j]=x[:,j]/norm(x[:,j])
         end
-        
+
         resvecs=A*x-B*x*diagm(lest)
         residuals=zeros(m0)
 
         for j in 1:m0
             residuals[j]=norm(resvecs[:,j])
-        end 
+        end
 
         ninside=0
         ninside_real=0
@@ -92,17 +92,17 @@ function feast_nsR(A,B,x0,nc,emid,r,eps,maxit)
         if(ninside==0)
             ninside = m0
         end
-        
+
         #println(lest," ",ninside_real)
 
         #get distances of estimated eigenvalues from middle of contour:
         lestdif=abs.(lest.-emid)
         #sort eigenpairs based on those distances:
-        p=sortperm(lestdif)     
- 
+        p=sortperm(lestdif)
+
         #p=sortperm(residuals)
         res=residuals[p[ninside]]
-        
+
         println("    $it: $(residuals[p[ninside]])   $ninside_real")
 
         if(res<eps)
@@ -115,7 +115,7 @@ function feast_nsR(A,B,x0,nc,emid,r,eps,maxit)
             #Qk=\(z*B-A,B*x)
             Qk[:]=0.0
             for i in 1:m0
-                Qk[:,i]=\(z*B-A,resvecs[:,i]) 
+                Qk[:,i]=\(z*B-A,resvecs[:,i])
                 #Qk[:,i]=zbicgstab(z*B-A,resvecs[:,i],zeros(n,1),100,1e-2)
             end
             Q=Q+wk[j]*exp(im*(gk[j]*pi+pi+offset))*(x-Qk)*diagm(1.0./(z.-lest))
@@ -360,7 +360,6 @@ function feast_nsR_MPI(comm,col,A,B,x0,nc,emid,r,eps,maxit)
         end
         
         #println(lest," ",ninside_real)
-
         #get distances of estimated eigenvalues from middle of contour:
         lestdif=abs.(lest.-emid)
         #sort eigenpairs based on those distances:
@@ -407,5 +406,3 @@ function feast_nsR_MPI(comm,col,A,B,x0,nc,emid,r,eps,maxit)
    
    return (lest,x) 
 end
-
-

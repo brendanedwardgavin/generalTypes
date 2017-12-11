@@ -17,7 +17,7 @@ function bicgstab(A,x0,b,maxit,epsmax)
             x=x+alpha*phat
             return x
         end
-        
+
         #solve M*rhat=r2
         rhat=copy(r2)
         u=A*rhat
@@ -35,7 +35,7 @@ function bicgstab(A,x0,b,maxit,epsmax)
     end
 
     return x
-end 
+end
 
 
 
@@ -45,7 +45,7 @@ function zbicgstab(A,b,x0,maxit,eps)
         r=b-A*x0
 	s=copy(r)
 	y0=copy(r)
-	
+
 	x=copy(x0)
 
 	#inner product:
@@ -66,8 +66,8 @@ function zbicgstab(A,b,x0,maxit,eps)
 		#inner product:
 		chi=((Aw)'*w)[1]/norm(Aw)^2
 		r=w-chi*Aw
-	
-	
+
+
 		println("   $i     $(norm(r))   $(norm(Aw))")	
 		if(norm(r)<eps)
 			#println("r finish: $(norm(r))")
@@ -80,7 +80,7 @@ function zbicgstab(A,b,x0,maxit,eps)
 		delta=(y0'*r)[1]
 		psi=-1.0*omega*delta/(deltaold*chi)
 		s=r-(s-(As)*chi)*psi
-		#print("     $(norm(s))\n")	
+		#print("     $(norm(s))\n")
 		if(norm(s)<eps)
 			#println("s finish: $(norm(s))")
 			return x
@@ -172,10 +172,9 @@ function zbicgstabBlock(A,b,x0,maxit,eps)
 			return x
 		end
 
-		
+
 	end
 
 	#println("          no converge: $(norm(r))")
 	return x
 end
-

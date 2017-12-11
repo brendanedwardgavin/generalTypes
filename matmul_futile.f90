@@ -26,6 +26,7 @@ contains
       call f_lib_initialize()
       initialized=.true.
       call mpiinit()
+      print *,'Hello world, I am',mpirank()
     end if
   end subroutine ensure_initialization
 
@@ -69,14 +70,26 @@ contains
     integer, intent(in) :: m
     type(hamiltonian), intent(in) :: H
     complex(dp), dimension(H%n,H%nvctr), intent(in) :: x
+    !complex(dp), dimension(H%n,H%m), intent(inout) :: y
     complex(dp), dimension(H%n,H%nvctr), intent(inout) :: y
 
     call ensure_initialization()
     !!call f_routine(id='hamiltonian_application')
     !example of parallel implementantion
     !just use zgemm for now
+    !y_vector=f_malloc([H%n,H%nvctrp], id='y_vector')
+    !call fmpi_alltoall(y,sendcount=H%np*H%nvctr/mpisize(),recvbuf=y_vector)
+
+    !call zgemm(H%transa,'N',H%n,m_parallel ,H%n,&
+    !1.0d0,H%ptr,H%n,x,H%n,0.0d0,y,H%n)
+
+    !call fmpi_alltoall(recvbuf=y,sendcount=H%np*H%nvctr/mpisize(),sendbuf=y_vector)
+
+
     call zgemm(H%transa,'N',H%n,m,H%n,&
     1.0d0,H%ptr,H%n,x,H%n,0.0d0,y,H%n)
+
+
     !!call f_release_routine()
   end subroutine hamiltonian_application
 
@@ -133,6 +146,7 @@ subroutine op_direct(A)
 end subroutine op_direct
 
 subroutine finalize_wrapper()
+  use wrapper_mpi
   implicit none
   call mpifinalize()
   call f_lib_finalize()
