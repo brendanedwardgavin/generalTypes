@@ -1,4 +1,4 @@
-# generalTypes
+# generalTypes a.k.a. jPAD package
 
 This module should prepare the basic objects that might be used in view of Portable Algorithmic Design with Julia (A suggestion for the Future name of the Library might be jPAD)
 
@@ -22,4 +22,4 @@ My suggestion for the next implementatation steps are therefore the following:
  * Define a set of non-regression tests for the two algorithm presented here, such as to validate future modifications in the library;
  * Define the non-regression also at the level of the external MPI layer in Julia;
  * Normalize the logfile such as to be inspected by the user to understand what is ongoing (a suggestion might be a yaml format for the logfile);
- * Introduce a set of "visualisation tools" that is able to provide at a glance the status of the convefgence with FEAST algorithm.
+ * Introduce a set of "visualisation tools" that is able to provide at a glance the status of the convergence with FEAST algorithm.

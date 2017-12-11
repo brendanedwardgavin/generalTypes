@@ -137,29 +137,31 @@ function userOp(options)
 
   function apply_to_userVec(x::myVec) #generalVec)
       ptr=getHandle(x)
-      m=size(ptr,2)
+      #m=size(ptr,2)
       if isVecBra(x)
           error("The Direct operator cannot be applied on a covector")
       end
-      newvecs=zeros(Complex128,size(ptr,1),m)
+      #newvecs=zeros(Complex128,size(ptr,1),m)
+      result=zeros(x)
+      newvecs=getHandle(result)
       ccall((:op_direct_,"./mymatmul_futile.so"),Void,(Ref{Int32},),mh)
       ccall((:apply_op_to_vec_,"./mymatmul_futile.so"),Void,(Ref{Int32},Ref{Complex128},Ref{Complex128},Ref{Int32}),
       mh,ptr,newvecs,Ref{Int32}(m))
-        return generalVec(newvecs,false)
+        return result #generalVec(newvecs,false)
   end
 
   function apply_adjoint_to_userVec(x::generalVec)
       ptr=getHandle(x)
-      m=size(ptr,2)
       if isVecKet(x)
           error("The Adjoint operator cannot be applied on a vector")
       end
-      newvecs=zeros(Complex128,size(ptr,1),m)
+      result=zeros(x)
+      newvecs=getHandle(result)
 	  ccall((:op_dagger_,"./mymatmul_futile.so"),Void,(Ref{Int32},),mh)
       ccall((:apply_op_to_vec_,"./mymatmul_futile.so"),Void,(Ref{Int32},Ref{Complex128},Ref{Complex128},Ref{Int32}),
       mh,ptr,newvecs,Ref{Int32}(m))
       #newvecs=ptr'*x.vec
-        return generalVec(newvecs,x.isCovector)
+        return result #generalVec(newvecs,x.isCovector)
   end
   x= userOp(ptr,mh,apply_to_userVec,apply_adjoint_to_userVec,false)
   return x
@@ -223,7 +225,8 @@ end
 #vector of all zeros
 #PLACEHOLDER; insert your own routine here
 function zeros(x::generalVec)
-    newvec=zeros(Complex128,size(x.vec,1),size(x.vec,2))
+    ptr=getHandle(x)
+    newvec=zeros(Complex128,size(ptr,1),size(ptr,2))
     return generalVec(newvec,x.isCovector)
 end
 
