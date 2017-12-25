@@ -98,7 +98,7 @@ contains
     type(hamiltonian), intent(inout) :: H
     call ensure_initialization()
     !!call f_routine(id='conjugate_hamiltonian')
-    print *,'inside conjugate hamiltonian'
+    !print *,'inside conjugate hamiltonian'
     H%transa='C'
     !!call f_release_routine()
   end subroutine conjugate_hamiltonian
@@ -108,7 +108,7 @@ contains
     type(hamiltonian), intent(inout) :: H
     call ensure_initialization()
     !!call f_routine(id='direct_hamiltonian')
-    print *,'inside direct hamiltonian'
+    !print *,'inside direct hamiltonian'
     H%transa='N'
     !!call f_release_routine()
   end subroutine direct_hamiltonian

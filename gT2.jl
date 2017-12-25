@@ -143,6 +143,7 @@ function userOp(options)
       end
       #newvecs=zeros(Complex128,size(ptr,1),m)
       result=zeros(x)
+      (n,m)=size(x)
       newvecs=getHandle(result)
       ccall((:op_direct_,"./mymatmul_futile.so"),Void,(Ref{Int32},),mh)
       ccall((:apply_op_to_vec_,"./mymatmul_futile.so"),Void,(Ref{Int32},Ref{Complex128},Ref{Complex128},Ref{Int32}),
@@ -156,6 +157,7 @@ function userOp(options)
           error("The Adjoint operator cannot be applied on a vector")
       end
       result=zeros(x)
+      (n,m)=size(x)
       newvecs=getHandle(result)
 	  ccall((:op_dagger_,"./mymatmul_futile.so"),Void,(Ref{Int32},),mh)
       ccall((:apply_op_to_vec_,"./mymatmul_futile.so"),Void,(Ref{Int32},Ref{Complex128},Ref{Complex128},Ref{Int32}),
